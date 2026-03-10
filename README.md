@@ -1,5 +1,3 @@
-# Demo-Readme
-
 import { useState, useEffect, useRef } from "react";
 import { Line, Pie } from "react-chartjs-2";
 import {
@@ -29,13 +27,13 @@ ChartJS.register(
 
 // Inject global keyframes once
 const _style = document.createElement("style");
+// .fs-btn:hover  { background: rgba(45,212,191,0.15) !important; border-color: rgba(45,212,191,0.4) !important; color: #2DD4BF !important; }
 _style.textContent = `
   @keyframes spin    { to { transform: rotate(360deg); } }
   @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
   @keyframes slideUp { from { opacity: 0; transform: translateY(28px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
-  .fs-btn:hover  { background: rgba(45,212,191,0.15) !important; border-color: rgba(45,212,191,0.4) !important; color: #2DD4BF !important; }
   .close-btn:hover { background: rgba(248,113,113,0.15) !important; border-color: rgba(248,113,113,0.4) !important; color: #F87171 !important; }
-  .hide-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .hide-scroll { scrollbar-width: 5px ; -ms-overflow-style: none; }
   .hide-scroll::-webkit-scrollbar { display: none; }
 `;
 if (!document.head.querySelector("#dash-keyframes")) {
@@ -454,7 +452,7 @@ function buildLineData(labels, values, hidden, realDates = []) {
         label: "Total Quantity (kg)",
         data: labels.map((l, i) => (hidden.has(l) ? null : values[i])),
         realDates, // stored for tooltip access
-        borderColor: "#2DD4BF",
+        // borderColor: "#2DD4BF",
         backgroundColor: (ctx) => {
           const { chartArea, ctx: c } = ctx.chart;
           if (!chartArea) return "rgba(45,212,191,0.3)";
@@ -498,7 +496,7 @@ function buildPieData(labels, values, hidden, colorOffset = 0) {
           getCategoryColor(l, i + colorOffset),
         ),
         borderWidth: 2,
-        borderColor: "#0f172a",
+        // borderColor: "#0f172a",
         datalabels: { display: false },
       },
     ],
@@ -582,7 +580,7 @@ const lineOptions = {
     datalabels: { display: false },
     title: {
       display: true,
-      text: "Quantity Over Time — Area Chart",
+      text: "Waste Quantity Trend",
       color: "#484575",
       font: { size: 14, weight: "600", family: "'DM Sans', sans-serif" },
       padding: { bottom: 10 },
@@ -674,9 +672,9 @@ function DataTable({
       <table style={styles.table}>
         <thead>
           <tr>
-            <th style={styles.th}></th>
-            <th style={styles.th}>Label</th>
-            <th style={{ ...styles.th, textAlign: "right" }}>Kg (Share)</th>
+            {/* <th style={styles.th}></th> */}
+            {/* <th style={styles.th}>Label</th> */}
+            {/* <th style={{ ...styles.th, textAlign: "right" }}>Kg (%)</th> */}
           </tr>
         </thead>
         <tbody>
@@ -695,7 +693,7 @@ function DataTable({
                   transition: "opacity 0.2s, background 0.15s",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#ffffff";
+                  e.currentTarget.style.background = "#777777";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = "#ffffff";
@@ -719,7 +717,7 @@ function DataTable({
                   style={{
                     ...styles.td,
                     textDecoration: isHidden ? "line-through" : "none",
-                    color: isHidden ? "#475569" : "#cbd5e1",
+                    color: isHidden ? "#475569" : "#414141",
                   }}
                 >
                   {shownLabels[i]}
@@ -728,7 +726,7 @@ function DataTable({
                   style={{
                     ...styles.td,
                     textAlign: "right",
-                    color: isHidden ? "#475569" : "#94a3b8",
+                    color: isHidden ? "#475569" : "#414141",
                   }}
                 >
                   {values[i].toFixed(2)}{" "}
@@ -962,33 +960,7 @@ function QuadrantCard({
 
         <div style={{ ...styles.chartInner, position: "relative" }}>
           {chartComponent}
-          {isEmpty && (
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "rgba(15,23,42,0.72)",
-                backdropFilter: "blur(3px)",
-                borderRadius: "0.5rem",
-                gap: "0.5rem",
-              }}
-            >
-              <span style={{ fontSize: "1.6rem", opacity: 0.4 }}>📭</span>
-              <span
-                style={{
-                  color: "#475569",
-                  fontSize: "0.82rem",
-                  fontFamily: "'DM Sans',sans-serif",
-                }}
-              >
-                No data for selected dates
-              </span>
-            </div>
-          )}
+        
         </div>
 
         <DataTable
@@ -1095,7 +1067,7 @@ export default function App() {
     <div style={styles.page}>
       <header style={styles.header}>
         <div>
-          <h1 style={styles.title}>Waste Analytics Dashboard</h1>
+          <h1 style={styles.title}>Waste Management Dashboard</h1>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           {dateRange.start && (
@@ -1105,9 +1077,9 @@ export default function App() {
                 display: "flex",
                 alignItems: "center",
                 gap: "0.4rem",
-                background: "rgba(248,113,113,0.1)",
+                background: "#EA457F",
                 border: "1px solid rgba(248,113,113,0.35)",
-                color: "#F87171",
+                color: "#ffffff",
                 borderRadius: "8px",
                 padding: "0.4rem 0.85rem",
                 cursor: "pointer",
@@ -1127,7 +1099,7 @@ export default function App() {
 
       <div style={styles.grid}>
         <QuadrantCard
-          title="Quantity Over Time — Area Chart"
+          title="Waste Quantity Trend"
           chartType="line"
           chartComponent={
             <Line
@@ -1149,7 +1121,7 @@ export default function App() {
           isEmpty={!hasData}
         />
         <QuadrantCard
-          title="Waste Category Breakdown"
+          title="Generated Waste Streams"
           chartType="pie"
           chartComponent={
             <Pie
@@ -1159,7 +1131,7 @@ export default function App() {
                 hiddenWaste,
                 0,
               )}
-              options={sharedPieOptions("Waste Category Breakdown")}
+              options={sharedPieOptions("Generated Waste Streams")}
             />
           }
           labels={raw.waste.labels}
@@ -1170,7 +1142,7 @@ export default function App() {
           isEmpty={!hasData}
         />
         <QuadrantCard
-          title="Material Sub-Category"
+          title="Dry Waste Category"
           chartType="pie"
           chartComponent={
             <Pie
@@ -1180,7 +1152,7 @@ export default function App() {
                 hiddenMaterial,
                 0,
               )}
-              options={sharedPieOptions("Material Sub-Category")}
+              options={sharedPieOptions("Dry Waste Category")}
             />
           }
           labels={raw.material.labels}
@@ -1191,7 +1163,7 @@ export default function App() {
           isEmpty={!hasData}
         />
         <QuadrantCard
-          title="Register Type Distribution"
+          title="Residual Solid Waste"
           chartType="pie"
           chartComponent={
             <Pie
@@ -1201,7 +1173,7 @@ export default function App() {
                 hiddenRegister,
                 2,
               )}
-              options={sharedPieOptions("Register Type Distribution")}
+              options={sharedPieOptions("Residual Solid Waste")}
             />
           }
           labels={raw.register.labels}
@@ -1222,20 +1194,22 @@ const styles = {
     background: "#ffffff",
     fontFamily: "'DM Sans', sans-serif",
     paddingBottom: "2rem",
+    border: "none",
+    outline: "none",
   },
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
     padding: "1.25rem 2rem 1rem",
-    borderBottom: "1px solid red",
+    borderBottom: "1px solid #EA457F",
   },
   title: {
-    marginLeft: "28rem",
-    fontSize: "clamp(1rem,2.5vw,1.5rem)",
-    fontWeight: 700,
+    marginLeft: "22.5rem",
+    fontWeight: 600,
     color: "#35335D", //  #484575
     letterSpacing: "-0.02em",
+    fontSize: "calc(1.325rem + .9vw)",
   },
   grid: {
     display: "grid",
@@ -1248,28 +1222,27 @@ const styles = {
     background: "#ffffff",
     borderRadius: "1rem",
     border: "1px solid rgba(148,163,184,0.1)",
-    boxShadow: "0 0px 2px rgba(0,0,0,0.4)",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
     padding: "1rem 1.2rem",
     display: "flex",
     flexDirection: "column",
     backdropFilter: "blur(8px)",
-    gap: "1rem",
+    gap: "2rem",
   },
   fsBtn: {
     position: "absolute",
     top: "0.75rem",
     right: "0.75rem",
-    background: "rgba(148,163,184,0.08)",
-    border: "1px solid rgba(148,163,184,0.15)",
-    color: "#64748b",
+    background: "#EA457F",
+    color: "#ffffff",
     borderRadius: "7px",
-    width: 28,
-    height: 28,
+    width: 25,
+    height: 25,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
-    zIndex: 2,
+    zIndex: 1,
     padding: 0,
     transition: "all 0.15s",
   },
@@ -1278,7 +1251,6 @@ const styles = {
     overflowX: "auto",
     overflowY: "auto",
     borderRadius: "0.5rem",
-    border: "1px solid rgba(148,163,184,0.1)",
     flex: 1,
   },
   table: {
@@ -1286,25 +1258,23 @@ const styles = {
     borderCollapse: "collapse",
     fontSize: "0.78rem",
     fontFamily: "'DM Sans',sans-serif",
-    backgroundColor: "rgb(71, 85, 105)",
+    // backgroundColor: "rgb(71, 85, 105)",
   },
   th: {
     position: "sticky",
     top: 0,
-    background: "rgb(71, 85, 105)",
-    color: "#2DD4BF",
+    borderBottom: "1px solid rgb(234, 69, 127)",
+    background: "#ffffff",
+    color: "#484575",
     fontWeight: 600,
     padding: "0.45rem 0.75rem",
     textAlign: "left",
-    borderBottom: "1px solid rgba(45,212,191,0.3)",
     whiteSpace: "nowrap",
     zIndex: 1,
     userSelect: "none",
   },
   td: {
     padding: "0.38rem 0.75rem",
-    color: "#cbd5e1",
-    borderBottom: "1px solid rgba(148,163,184,0.07)",
     whiteSpace: "nowrap",
     transition: "color 0.2s",
   },
@@ -1322,8 +1292,8 @@ const styles = {
   spinner: {
     width: 40,
     height: 40,
-    border: "3px solid rgba(45,212,191,0.2)",
-    borderTop: "3px solid #2DD4BF",
+    // border: "3px solid rgba(45,212,191,0.2)",
+    // borderTop: "3px solid #2DD4BF",
     borderRadius: "50%",
     animation: "spin 0.8s linear infinite",
   },
