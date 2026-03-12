@@ -27,12 +27,12 @@ ChartJS.register(
 
 // Inject global keyframes once
 const _style = document.createElement("style");
-// .fs-btn:hover  { background: rgba(45,212,191,0.15) !important; border-color: rgba(45,212,191,0.4) !important; color: #2DD4BF !important; }
 _style.textContent = `
   @keyframes spin    { to { transform: rotate(360deg); } }
   @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
   @keyframes slideUp { from { opacity: 0; transform: translateY(28px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
-  .close-btn:hover { background: rgba(248,113,113,0.15) !important; border-color: rgba(248,113,113,0.4) !important; color: #F87171 !important; }
+  .fs-btn:focus-visible { outline: none !important; }
+  .fs-btn:hover, .close-btn:hover { background: rgba(248,113,113,0.15) !important; border-color: rgba(248,113,113,0.4) !important; color: #F87171 !important; }
   .hide-scroll { scrollbar-width: 5px ; -ms-overflow-style: none; }
   .hide-scroll::-webkit-scrollbar { display: none; }
 `;
@@ -151,13 +151,11 @@ function RangeCalendar({ onApply, initialStart, initialEnd }) {
 
   function handleDay(d) {
     if (!selecting) {
-      // First click: start selection, immediately apply as single date
       setSelecting(d);
       setStart(d);
       setEnd(null);
       onApply(d, d);
     } else {
-      // Second click: complete the range, auto-apply
       const s = selecting < d ? selecting : d;
       const e = selecting < d ? d : selecting;
       setStart(s);
@@ -179,8 +177,19 @@ function RangeCalendar({ onApply, initialStart, initialEnd }) {
   const previewStart =
     selecting && hovered ? (hovered < selecting ? hovered : selecting) : start;
 
+  // Build a flat ordered list of visible day cells for pill-row detection
+  // We need to know if a cell is at the start/end of a grid row (col 0 or col 6)
+  // to apply rounded caps correctly on the range band
+  const COL_COUNT = 7;
+
   return (
     <div style={cal.wrap}>
+      {/* Header */}
+      <div style={cal.header}>
+        {/* <span style={cal.headerTitle}>Select Date</span> */}
+      </div>
+
+      {/* Month nav */}
       <div style={cal.nav}>
         <button style={cal.navBtn} onClick={prevMonth}>
           ‹
@@ -192,6 +201,8 @@ function RangeCalendar({ onApply, initialStart, initialEnd }) {
           ›
         </button>
       </div>
+
+      {/* Day grid */}
       <div style={cal.grid}>
         {DAYS.map((d) => (
           <div key={d} style={cal.dayLabel}>
@@ -200,47 +211,112 @@ function RangeCalendar({ onApply, initialStart, initialEnd }) {
         ))}
         {cells.map((d, i) => {
           if (!d) return <div key={"e" + i} />;
-          const isStart = sameDay(d, start),
-            isEnd = sameDay(d, previewEnd),
-            isToday = sameDay(d, today);
+
+          const col = i % COL_COUNT; // column index 0–6
+          const isStart = sameDay(d, start);
+          const isEnd = sameDay(d, previewEnd);
+          const isSelecting = sameDay(d, selecting);
+          const isToday = sameDay(d, today);
           const isInRange =
             inRange(d, previewStart, previewEnd) && !isStart && !isEnd;
-          const isSelecting = sameDay(d, selecting);
+
+          // Range band background — extend flush to cell edges, cap only at endpoints
+          const rangeActive = isInRange || isStart || isEnd;
+          const isRangeStart = sameDay(d, previewStart);
+          const isRangeEnd = sameDay(d, previewEnd);
+          const roundLeft = isRangeStart || col === 0;
+          const roundRight = isRangeEnd || col === 6;
+
           return (
             <div
               key={i}
               onClick={() => handleDay(d)}
               onMouseEnter={() => setHovered(d)}
               onMouseLeave={() => setHovered(null)}
-              style={{
-                ...cal.day,
-                ...(isStart || isSelecting ? cal.dayStart : {}),
-                ...(isEnd && !isSelecting ? cal.dayEnd : {}),
-                ...(isInRange ? cal.dayRange : {}),
-                ...(isToday && !isStart && !isEnd ? cal.dayToday : {}),
-              }}
+              style={{ position: "relative", ...cal.cell }}
             >
-              {d.getDate()}
+              {/* Range band layer */}
+              {rangeActive &&
+                previewStart &&
+                previewEnd &&
+                !sameDay(previewStart, previewEnd) && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      left: roundLeft ? "50%" : "0",
+                      right: roundRight ? "50%" : "0",
+                      height: 30,
+                      background: "rgba(59,130,246,0.13)",
+                      zIndex: 0,
+                      ...(isRangeStart ? { borderRadius: "50% 0 0 50%" } : {}),
+                      ...(isRangeEnd ? { borderRadius: "0 50% 50% 0" } : {}),
+                      ...(!isRangeStart && !isRangeEnd && col === 0
+                        ? { borderRadius: "0" }
+                        : {}),
+                    }}
+                  />
+                )}
+
+              {/* Day circle */}
+              <div
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  width: 30,
+                  height: 30,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "50%",
+                  background:
+                    isStart || isSelecting || isEnd ? "#3B82F6" : "transparent",
+                  color:
+                    isStart || isSelecting || isEnd
+                      ? "#fff"
+                      : isInRange
+                        ? "#1d4ed8"
+                        : isToday
+                          ? "#3B82F6"
+                          : "#374151",
+                  fontWeight: isStart || isEnd || isToday ? 700 : 400,
+                  fontSize: "0.82rem",
+                  cursor: "pointer",
+                  userSelect: "none",
+                  boxShadow:
+                    isStart || isEnd
+                      ? "0 2px 8px rgba(59,130,246,0.4)"
+                      : "none",
+                  transition: "background 0.12s",
+                }}
+              >
+                {d.getDate()}
+              </div>
             </div>
           );
         })}
       </div>
+
+      {/* Footer label */}
       <div style={cal.selectedLabel}>
         {selecting && (
-          <span style={{ color: "#2DD4BF" }}>Now select end date…</span>
+          <span style={{ color: "#3B82F6" }}>Now select end date…</span>
         )}
         {start && end && !selecting && (
-          <span>
-            <b>{formatDisplay(start)}</b> → <b>{formatDisplay(end)}</b>
+          <span style={{ color: "#374151" }}>
+            <b>{formatDisplay(start)}</b>
+            <span style={{ color: "#9ca3af", margin: "0 4px" }}>→</span>
+            <b>{formatDisplay(end)}</b>
           </span>
         )}
         {start && !end && !selecting && (
-          <span>
+          <span style={{ color: "#374151" }}>
             <b>{formatDisplay(start)}</b>
           </span>
         )}
         {!start && (
-          <span style={{ color: "#475569" }}>Click a date to select</span>
+          <span style={{ color: "#9ca3af" }}>Click a date to select</span>
         )}
       </div>
     </div>
@@ -249,77 +325,73 @@ function RangeCalendar({ onApply, initialStart, initialEnd }) {
 
 const cal = {
   wrap: {
-    background: "#1e293b",
-    border: "1px solid rgba(45,212,191,0.25)",
-    borderRadius: "0.75rem",
-    padding: "1rem",
-    width: 280,
-    boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
+    background: "#ffffff",
+    border: "1px solid #e5e7eb",
+    borderRadius: "0.85rem",
+    padding: "0.85rem 1rem 0.75rem",
+    width: 290,
+    boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
     fontFamily: "'DM Sans',sans-serif",
+  },
+  header: {
+    marginBottom: "0.5rem",
+  },
+  headerTitle: {
+    display: "block",
+    background: "#ffffff",
+    border: "1px solid #d1d5db",
+    borderRadius: "6px",
+    padding: "0.3rem 0.75rem",
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    color: "#374151",
+    width: "100%",
+    boxSizing: "border-box",
   },
   nav: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: "0.6rem",
+    margin: "0.4rem 0 0.4rem",
   },
   navBtn: {
     background: "none",
     border: "none",
-    color: "#94a3b8",
+    color: "#6b7280",
     cursor: "pointer",
     fontSize: "1.2rem",
     padding: "0 0.4rem",
     lineHeight: 1,
   },
-  navTitle: { color: "#f1f5f9", fontWeight: 600, fontSize: "0.9rem" },
+  navTitle: { color: "#374151", fontWeight: 600, fontSize: "0.88rem" },
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(7,1fr)",
-    gap: "2px",
+    gap: "0",
     marginBottom: "0.5rem",
   },
   dayLabel: {
     textAlign: "center",
-    color: "#475569",
-    fontSize: "0.7rem",
+    color: "#9ca3af",
+    fontSize: "0.68rem",
     padding: "4px 0",
     userSelect: "none",
   },
-  day: {
-    textAlign: "center",
-    fontSize: "0.78rem",
-    padding: "5px 2px",
-    borderRadius: "6px",
+  cell: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 36,
     cursor: "pointer",
-    color: "#94a3b8",
-    userSelect: "none",
-    transition: "background 0.1s,color 0.1s",
   },
-  dayStart: {
-    background: "#2DD4BF",
-    color: "#0f172a",
-    fontWeight: 700,
-    borderRadius: "6px",
-  },
-  dayEnd: {
-    background: "#0891b2",
-    color: "#fff",
-    fontWeight: 700,
-    borderRadius: "6px",
-  },
-  dayRange: {
-    background: "rgba(45,212,191,0.15)",
-    color: "#2DD4BF",
-    borderRadius: "0",
-  },
-  dayToday: { border: "1px solid rgba(45,212,191,0.5)", color: "#2DD4BF" },
   selectedLabel: {
-    fontSize: "0.75rem",
-    color: "#94a3b8",
+    fontSize: "0.74rem",
+    color: "#6b7280",
     textAlign: "center",
     minHeight: "1.4rem",
-    marginTop: "0.4rem",
+    marginTop: "0.3rem",
+    borderTop: "1px solid #f3f4f6",
+    paddingTop: "0.4rem",
   },
 };
 
@@ -340,7 +412,7 @@ function DateRangePicker({ dateRange, onApply }) {
     ? sameDay(dateRange.start, dateRange.end)
       ? formatDisplay(dateRange.start)
       : `${formatDisplay(dateRange.start)} → ${formatDisplay(dateRange.end)}`
-    : formatDisplay(new Date());
+    : "Select Date Range";
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -350,23 +422,21 @@ function DateRangePicker({ dateRange, onApply }) {
           display: "flex",
           alignItems: "center",
           gap: "0.5rem",
-          background: dateRange.start
-            ? "rgba(45,212,191,0.15)"
-            : "rgba(30,41,59,0.9)",
-          border: `1px solid ${dateRange.start ? "rgba(45,212,191,0.5)" : "rgba(148,163,184,0.2)"}`,
-          color: dateRange.start ? "#2DD4BF" : "#94a3b8",
+          background: "#ffffff",
+          border: "1px solid #d1d5db",
+          color: dateRange.start ? "#374151" : "#6b7280",
           borderRadius: "8px",
           padding: "0.4rem 0.9rem",
           cursor: "pointer",
           fontFamily: "'DM Sans',sans-serif",
           fontSize: "0.82rem",
           fontWeight: 500,
-          transition: "all 0.2s",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
         }}
       >
         <span>📅</span>
         <span>{label}</span>
-        <span style={{ fontSize: "0.65rem", opacity: 0.6 }}>
+        <span style={{ fontSize: "0.65rem", opacity: 0.5 }}>
           {open ? "▲" : "▼"}
         </span>
       </button>
@@ -375,7 +445,7 @@ function DateRangePicker({ dateRange, onApply }) {
           style={{
             position: "absolute",
             top: "calc(100% + 8px)",
-            right: 0,
+            left: 0,
             zIndex: 1000,
           }}
         >
@@ -406,7 +476,6 @@ function processData(records) {
     return parse(a) - parse(b);
   });
 
-  // Build M-N labels: last date = "M", second-to-last = "M-1", etc.
   const n = sortedDates.length;
   const mLabels = sortedDates.map((_, i) => {
     const diff = n - 1 - i;
@@ -451,8 +520,7 @@ function buildLineData(labels, values, hidden, realDates = []) {
       {
         label: "Total Quantity (kg)",
         data: labels.map((l, i) => (hidden.has(l) ? null : values[i])),
-        realDates, // stored for tooltip access
-        // borderColor: "#2DD4BF",
+        realDates,
         backgroundColor: (ctx) => {
           const { chartArea, ctx: c } = ctx.chart;
           if (!chartArea) return "rgba(45,212,191,0.3)";
@@ -471,7 +539,7 @@ function buildLineData(labels, values, hidden, realDates = []) {
           hidden.has(l) ? "transparent" : "#2DD4BF",
         ),
         pointBorderColor: labels.map((l) =>
-          hidden.has(l) ? "transparent" : "#0f172a",
+          hidden.has(l) ? "transparent" : "#0f172aa2",
         ),
         pointBorderWidth: 2,
         pointRadius: 5,
@@ -496,7 +564,6 @@ function buildPieData(labels, values, hidden, colorOffset = 0) {
           getCategoryColor(l, i + colorOffset),
         ),
         borderWidth: 2,
-        // borderColor: "#0f172a",
         datalabels: { display: false },
       },
     ],
@@ -507,27 +574,19 @@ function buildPieData(labels, values, hidden, colorOffset = 0) {
 const piePercentLabelPlugin = {
   id: "piePercentLabels",
   afterDatasetsDraw(chart) {
-    // Only run on pie/doughnut charts
     if (chart.config.type !== "pie" && chart.config.type !== "doughnut") return;
-
     const { ctx, data } = chart;
     const dataset = data.datasets[0];
     if (!dataset) return;
-
     const total = dataset.data.reduce((a, b) => a + b, 0);
     const meta = chart.getDatasetMeta(0);
-
     meta.data.forEach((arc, i) => {
       const value = dataset.data[i];
       if (!value || value === 0) return;
-
       const pct = (value / total) * 100;
-      // Skip tiny slices to avoid clutter (< 3%)
       if (pct < 3) return;
-
       const label = pct.toFixed(1) + "%";
       const { x, y } = arc.tooltipPosition();
-
       ctx.save();
       ctx.font = `bold ${pct < 6 ? 9 : 11}px 'DM Sans', sans-serif`;
       ctx.fillStyle = "#ffffff";
@@ -541,21 +600,15 @@ const piePercentLabelPlugin = {
   },
 };
 
-// Register the plugin globally
+// Register plugins globally
 ChartJS.register(piePercentLabelPlugin);
 
-const sharedPieOptions = (title) => ({
+const sharedPieOptions = () => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
     legend: { display: false },
-    title: {
-      display: true,
-      text: title,
-      color: "#484575",
-      font: { size: 14, weight: "600", family: "'DM Sans', sans-serif" },
-      padding: { bottom: 10 },
-    },
+    title: { display: false },
     tooltip: {
       callbacks: {
         label: (ctx) => {
@@ -566,7 +619,6 @@ const sharedPieOptions = (title) => ({
         },
       },
     },
-    // Disable chartjs-plugin-datalabels globally for pie charts
     datalabels: { display: false },
     piePercentLabels: {},
   },
@@ -578,13 +630,7 @@ const lineOptions = {
   plugins: {
     legend: { display: false },
     datalabels: { display: false },
-    title: {
-      display: true,
-      text: "Waste Quantity Trend",
-      color: "#484575",
-      font: { size: 14, weight: "600", family: "'DM Sans', sans-serif" },
-      padding: { bottom: 10 },
-    },
+    title: { display: false },
     tooltip: {
       callbacks: {
         title: (items) => {
@@ -659,9 +705,7 @@ function DataTable({
   isPie = false,
   displayLabels = null,
 }) {
-  // Always show Kg(%) — for line chart use total of all values, for pie same
   const total = values.reduce((a, b) => a + b, 0);
-  // displayLabels overrides what's shown in the Label column (used for line chart to show real dates)
   const shownLabels = displayLabels || labels;
 
   return (
@@ -671,11 +715,7 @@ function DataTable({
     >
       <table style={styles.table}>
         <thead>
-          <tr>
-            {/* <th style={styles.th}></th> */}
-            {/* <th style={styles.th}>Label</th> */}
-            {/* <th style={{ ...styles.th, textAlign: "right" }}>Kg (%)</th> */}
-          </tr>
+          <tr></tr>
         </thead>
         <tbody>
           {labels.map((label, i) => {
@@ -761,7 +801,6 @@ function FullscreenModal({
   onClose,
   realDates = [],
 }) {
-  // Close on Escape key
   useEffect(() => {
     const handler = (e) => {
       if (e.key === "Escape") onClose();
@@ -770,7 +809,6 @@ function FullscreenModal({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Prevent body scroll while open
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => {
@@ -785,7 +823,6 @@ function FullscreenModal({
 
   const chartOptions =
     chartType === "line" ? lineOptions : sharedPieOptions(title);
-
   const ChartComponent = chartType === "line" ? Line : Pie;
 
   return (
@@ -796,7 +833,6 @@ function FullscreenModal({
       }}
     >
       <div style={modal.panel}>
-        {/* Modal header */}
         <div style={modal.header}>
           <h2 style={modal.title}>{title}</h2>
           <button
@@ -808,10 +844,7 @@ function FullscreenModal({
             <CloseIcon />
           </button>
         </div>
-
-        {/* Modal body: chart left, table right */}
         <div style={modal.body}>
-          {/* Chart side */}
           <div style={modal.chartSide}>
             <div
               style={{ position: "relative", height: "100%", width: "100%" }}
@@ -819,11 +852,7 @@ function FullscreenModal({
               <ChartComponent data={chartData} options={chartOptions} />
             </div>
           </div>
-
-          {/* Divider */}
           <div style={modal.divider} />
-
-          {/* Table side */}
           <div style={modal.tableSide}>
             <DataTable
               labels={labels}
@@ -886,9 +915,9 @@ const modal = {
     letterSpacing: "-0.01em",
   },
   closeBtn: {
-    background: "rgba(148,163,184,0.1)",
+    background: "#EA457F",
     border: "1px solid rgba(148,163,184,0.15)",
-    color: "#94a3b8",
+    color: "#ffffff",
     borderRadius: "8px",
     width: 34,
     height: 34,
@@ -899,11 +928,7 @@ const modal = {
     transition: "all 0.15s",
     padding: 0,
   },
-  body: {
-    display: "flex",
-    flex: 1,
-    overflow: "hidden",
-  },
+  body: { display: "flex", flex: 1, overflow: "hidden" },
   chartSide: {
     flex: "0 0 58%",
     padding: "1.25rem 1.5rem",
@@ -911,11 +936,7 @@ const modal = {
     alignItems: "center",
     justifyContent: "center",
   },
-  divider: {
-    width: "1px",
-    background: "rgba(148,163,184,0.1)",
-    flexShrink: 0,
-  },
+  divider: { width: "1px", background: "rgba(148,163,184,0.1)", flexShrink: 0 },
   tableSide: {
     flex: 1,
     display: "flex",
@@ -949,20 +970,24 @@ function QuadrantCard({
   return (
     <>
       <div style={styles.card}>
-        <button
-          className="fs-btn"
-          style={styles.fsBtn}
-          onClick={() => setIsFullscreen(true)}
-          title="Open fullscreen"
-        >
-          <FullscreenIcon />
-        </button>
-
+        {/* Card heading: title + fullscreen button */}
+        <div style={styles.cardHeader}>
+          <span style={styles.cardTitle}>{title}</span>
+          <button
+            className="fs-btn"
+            style={styles.fsBtn}
+            onClick={() => setIsFullscreen(true)}
+            title="Open fullscreen"
+          >
+            <FullscreenIcon />
+          </button>
+        </div>
+        {/* Separator line */}
+        <div style={styles.cardDivider} />
+        {/* Chart */}
         <div style={{ ...styles.chartInner, position: "relative" }}>
           {chartComponent}
-        
         </div>
-
         <DataTable
           labels={labels}
           values={values}
@@ -1037,7 +1062,6 @@ export default function App() {
     setDateRange({ start, end });
     resetHidden();
   };
-
   const handleClear = () => {
     setDateRange({ start: null, end: null });
     resetHidden();
@@ -1066,10 +1090,25 @@ export default function App() {
   return (
     <div style={styles.page}>
       <header style={styles.header}>
-        <div>
-          <h1 style={styles.title}>Waste Management Dashboard</h1>
+        {/* Left: Date Range Picker */}
+        <div
+          style={{ display: "flex", alignItems: "center", minWidth: "200px" }}
+        >
+          <DateRangePicker dateRange={dateRange} onApply={handleApply} />
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+
+        {/* Center: Title */}
+        <h1 style={styles.title}>Waste Management Dashboard</h1>
+
+        {/* Right: Clear Filter */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            minWidth: "200px",
+            justifyContent: "flex-end",
+          }}
+        >
           {dateRange.start && (
             <button
               onClick={handleClear}
@@ -1086,14 +1125,12 @@ export default function App() {
                 fontFamily: "'DM Sans',sans-serif",
                 fontSize: "0.82rem",
                 fontWeight: 500,
-                transition: "all 0.2s",
               }}
             >
               <span style={{ fontSize: "0.9rem" }}>✕</span>
               <span>Clear filter</span>
             </button>
           )}
-          <DateRangePicker dateRange={dateRange} onApply={handleApply} />
         </div>
       </header>
 
@@ -1131,7 +1168,7 @@ export default function App() {
                 hiddenWaste,
                 0,
               )}
-              options={sharedPieOptions("Generated Waste Streams")}
+              options={sharedPieOptions()}
             />
           }
           labels={raw.waste.labels}
@@ -1152,7 +1189,7 @@ export default function App() {
                 hiddenMaterial,
                 0,
               )}
-              options={sharedPieOptions("Dry Waste Category")}
+              options={sharedPieOptions()}
             />
           }
           labels={raw.material.labels}
@@ -1173,7 +1210,7 @@ export default function App() {
                 hiddenRegister,
                 2,
               )}
-              options={sharedPieOptions("Residual Solid Waste")}
+              options={sharedPieOptions()}
             />
           }
           labels={raw.register.labels}
@@ -1205,11 +1242,13 @@ const styles = {
     borderBottom: "1px solid #EA457F",
   },
   title: {
-    marginLeft: "22.5rem",
+    margin: 0,
     fontWeight: 600,
-    color: "#35335D", //  #484575
+    color: "#35335D",
     letterSpacing: "-0.02em",
     fontSize: "calc(1.325rem + .9vw)",
+    textAlign: "center",
+    flex: 1,
   },
   grid: {
     display: "grid",
@@ -1223,28 +1262,43 @@ const styles = {
     borderRadius: "1rem",
     border: "1px solid rgba(148,163,184,0.1)",
     boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
-    padding: "1rem 1.2rem",
+    padding: "0.85rem 1.2rem 1rem",
     display: "flex",
     flexDirection: "column",
     backdropFilter: "blur(8px)",
-    gap: "2rem",
+    gap: "0.75rem",
+  },
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  cardTitle: {
+    color: "#484575",
+    fontWeight: 600,
+    fontSize: "0.95rem",
+    fontFamily: "'DM Sans', sans-serif",
+    letterSpacing: "-0.01em",
+  },
+  cardDivider: {
+    height: "1px",
+    background: "rgba(234, 69, 127, 0.45)",
+    flexShrink: 0,
+    marginBottom: "0.25rem",
   },
   fsBtn: {
-    position: "absolute",
-    top: "0.75rem",
-    right: "0.75rem",
     background: "#EA457F",
+    border: "1px solid rgba(148,163,184,0.15)",
     color: "#ffffff",
     borderRadius: "7px",
-    width: 25,
-    height: 25,
+    width: 28,
+    height: 28,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
-    zIndex: 1,
     padding: 0,
-    transition: "all 0.15s",
+    flexShrink: 0,
   },
   chartInner: { position: "relative", height: "260px" },
   tableWrapper: {
@@ -1258,7 +1312,6 @@ const styles = {
     borderCollapse: "collapse",
     fontSize: "0.78rem",
     fontFamily: "'DM Sans',sans-serif",
-    // backgroundColor: "rgb(71, 85, 105)",
   },
   th: {
     position: "sticky",
@@ -1292,8 +1345,6 @@ const styles = {
   spinner: {
     width: 40,
     height: 40,
-    // border: "3px solid rgba(45,212,191,0.2)",
-    // borderTop: "3px solid #2DD4BF",
     borderRadius: "50%",
     animation: "spin 0.8s linear infinite",
   },
