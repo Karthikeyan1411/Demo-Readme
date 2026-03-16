@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext } from "react";
+import { DataContext } from "../Context/DataContext";
 import { Line, Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -25,7 +26,6 @@ ChartJS.register(
   Filler,
 );
 
-// Inject global keyframes once
 const _style = document.createElement("style");
 _style.textContent = `
   @keyframes spin    { to { transform: rotate(360deg); } }
@@ -42,17 +42,20 @@ if (!document.head.querySelector("#dash-keyframes")) {
 }
 
 const CATEGORY_COLORS = {
-  "Food Waste Gen": "#4CAF50",
+  "Direct Residual Gen": "#C62828",
   "Dry Waste Gen": "#2196F3",
+  "Food Waste Gen": "#4CAF50",
   "Garden Waste Gen": "#808000",
   "Coconut Shell Gen": "#8B4513",
   "Tender Coconut Gen": "#FF9800",
   "Bio Hazardous Waste Gen": "#FF6B6B",
-  "C&D Gen": "#E0E0E0",
+  "C&D Gen": "#90A4AE",
   "Sugarcane Trash Gen": "#9C27B0",
-  "Direct Residual Gen": "#C62828",
   "Residual Food Waste": "#E57373",
   "Residual Dry Waste": "#EF9A9A",
+  "Inward Register": "#00BCD4",
+  "Outward Register": "#FF5722",
+  Unknown: "#B0BEC5",
 };
 
 const CATEGORY_COLOR_VALUES = Object.values(CATEGORY_COLORS);
@@ -64,7 +67,6 @@ function getCategoryColor(label, index) {
   );
 }
 
-// ─── Date helpers ──────────────────────────────────────────────────────────────
 const MONTHS = [
   "Jan",
   "Feb",
@@ -111,18 +113,28 @@ function inRange(d, start, end) {
 }
 
 function filterByDateRange(records, dateRange) {
-  if (!dateRange.start) return records;
-  return records.filter((r) => {
-    const d = parseRecordDate(r.Date_field);
-    if (!d) return false;
-    const s = dateRange.start.getTime();
-    const e = (dateRange.end || dateRange.start).getTime();
-    const t = d.getTime();
-    return t >= Math.min(s, e) && t <= Math.max(s, e) + 86400000 - 1;
-  });
+  // Records are top-level Zoho objects with a nested Data JSON string.
+  // Date filtering happens at the month level inside processData via filterMonths.
+  // This function just returns all records; month-level filtering is applied in processData.
+  return records;
 }
 
-// ─── Range Calendar ────────────────────────────────────────────────────────────
+function isMonthInRange(monthKey, dateRange) {
+  // monthKey format: "Mar 2026"
+  if (!dateRange || !dateRange.start) return true;
+  const [mon, yr] = monthKey.split(" ");
+  const monthDate = new Date(`${mon} 01 ${yr}`);
+  const start = new Date(
+    dateRange.start.getFullYear(),
+    dateRange.start.getMonth(),
+    1,
+  );
+  const end = dateRange.end
+    ? new Date(dateRange.end.getFullYear(), dateRange.end.getMonth(), 1)
+    : start;
+  return monthDate >= start && monthDate <= end;
+}
+
 function RangeCalendar({ onApply, initialStart, initialEnd }) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(
@@ -176,20 +188,11 @@ function RangeCalendar({ onApply, initialStart, initialEnd }) {
     selecting && hovered ? (hovered > selecting ? hovered : selecting) : end;
   const previewStart =
     selecting && hovered ? (hovered < selecting ? hovered : selecting) : start;
-
-  // Build a flat ordered list of visible day cells for pill-row detection
-  // We need to know if a cell is at the start/end of a grid row (col 0 or col 6)
-  // to apply rounded caps correctly on the range band
   const COL_COUNT = 7;
 
   return (
     <div style={cal.wrap}>
-      {/* Header */}
-      <div style={cal.header}>
-        {/* <span style={cal.headerTitle}>Select Date</span> */}
-      </div>
-
-      {/* Month nav */}
+      <div style={cal.header}></div>
       <div style={cal.nav}>
         <button style={cal.navBtn} onClick={prevMonth}>
           ‹
@@ -201,8 +204,6 @@ function RangeCalendar({ onApply, initialStart, initialEnd }) {
           ›
         </button>
       </div>
-
-      {/* Day grid */}
       <div style={cal.grid}>
         {DAYS.map((d) => (
           <div key={d} style={cal.dayLabel}>
@@ -211,16 +212,13 @@ function RangeCalendar({ onApply, initialStart, initialEnd }) {
         ))}
         {cells.map((d, i) => {
           if (!d) return <div key={"e" + i} />;
-
-          const col = i % COL_COUNT; // column index 0–6
+          const col = i % COL_COUNT;
           const isStart = sameDay(d, start);
           const isEnd = sameDay(d, previewEnd);
           const isSelecting = sameDay(d, selecting);
           const isToday = sameDay(d, today);
           const isInRange =
             inRange(d, previewStart, previewEnd) && !isStart && !isEnd;
-
-          // Range band background — extend flush to cell edges, cap only at endpoints
           const rangeActive = isInRange || isStart || isEnd;
           const isRangeStart = sameDay(d, previewStart);
           const isRangeEnd = sameDay(d, previewEnd);
@@ -235,7 +233,6 @@ function RangeCalendar({ onApply, initialStart, initialEnd }) {
               onMouseLeave={() => setHovered(null)}
               style={{ position: "relative", ...cal.cell }}
             >
-              {/* Range band layer */}
               {rangeActive &&
                 previewStart &&
                 previewEnd &&
@@ -258,8 +255,6 @@ function RangeCalendar({ onApply, initialStart, initialEnd }) {
                     }}
                   />
                 )}
-
-              {/* Day circle */}
               <div
                 style={{
                   position: "relative",
@@ -297,8 +292,6 @@ function RangeCalendar({ onApply, initialStart, initialEnd }) {
           );
         })}
       </div>
-
-      {/* Footer label */}
       <div style={cal.selectedLabel}>
         {selecting && (
           <span style={{ color: "#3B82F6" }}>Now select end date…</span>
@@ -333,21 +326,7 @@ const cal = {
     boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
     fontFamily: "'DM Sans',sans-serif",
   },
-  header: {
-    marginBottom: "0.5rem",
-  },
-  headerTitle: {
-    display: "block",
-    background: "#ffffff",
-    border: "1px solid #d1d5db",
-    borderRadius: "6px",
-    padding: "0.3rem 0.75rem",
-    fontSize: "0.85rem",
-    fontWeight: 600,
-    color: "#374151",
-    width: "100%",
-    boxSizing: "border-box",
-  },
+  header: { marginBottom: "0.5rem" },
   nav: {
     display: "flex",
     alignItems: "center",
@@ -395,7 +374,6 @@ const cal = {
   },
 };
 
-// ─── Date Picker Button + Popover ──────────────────────────────────────────────
 function DateRangePicker({ dateRange, onApply }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -462,65 +440,194 @@ function DateRangePicker({ dateRange, onApply }) {
   );
 }
 
-function processData(records) {
-  const byDate = {};
+const MONTH_ORDER = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+function getMonthKey(dateStr) {
+  // dateStr format: "12-Mar-2026"
+  if (!dateStr) return null;
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) return null;
+  return `${parts[1]} ${parts[2]}`; // "Mar 2026"
+}
+
+function processData(records, dateRange = {}) {
+  // byCatMonth["Waste_Category"]["Mar 2026"] = total kg
+  const byCatMonth = {};
+  const byMaterial = {}; // Material_Waste_Category -> kg
+  const byRegister = {}; // Register_Type -> kg
+  const allMonthsSet = new Set();
+
+  const addTo = (obj, key, val) => {
+    obj[key] = (obj[key] || 0) + parseFloat(val || 0);
+  };
+
   records.forEach((r) => {
-    const date = r.Date_field || "Unknown";
-    byDate[date] = (byDate[date] || 0) + parseFloat(r.Total_Quantity_Kg || 0);
-  });
-  const sortedDates = Object.keys(byDate).sort((a, b) => {
-    const parse = (d) => {
-      const [day, mon, yr] = d.split("-");
-      return new Date(`${mon} ${day} ${yr}`);
-    };
-    return parse(a) - parse(b);
+    const monthKey = getMonthKey(r.Date_field);
+    if (!monthKey) return;
+
+    // Filter by exact date range
+    if (dateRange?.start) {
+      const recDate = parseRecordDate(r.Date_field);
+      if (!recDate) return;
+      const s = dateRange.start.getTime();
+      const e = (dateRange.end || dateRange.start).getTime();
+      const t = recDate.getTime();
+      if (t < Math.min(s, e) || t > Math.max(s, e) + 86400000 - 1) return;
+    }
+
+    // Only Inward Register records for generation charts
+    const regType = r.Register_Type?.display_value || r.Register_Type || "";
+    if (regType !== "Inward Register") return;
+
+    const kg = parseFloat(r.Total_Quantity_Kg || 0);
+    if (kg <= 0) return;
+
+    // Line chart + waste table: per Waste_Category per month
+    const cat = r.Waste_Category?.display_value || r.Waste_Category || "Others";
+
+    // Exclude residual/non-generation categories
+    const EXCLUDED_CATS = [
+      "Direct Residual Waste Gen",
+      "C&D Gen",
+      "Bio Hazardous Waste Gen",
+    ];
+    if (EXCLUDED_CATS.includes(cat)) return;
+
+    allMonthsSet.add(monthKey); // only add month if category passes exclusion
+
+    if (!byCatMonth[cat]) byCatMonth[cat] = {};
+    byCatMonth[cat][monthKey] = (byCatMonth[cat][monthKey] || 0) + kg;
+
+    // Pie 2: Material_Waste_Category
+    const mat =
+      r.Material_Waste_Category?.display_value ||
+      r.Material_Waste_Category ||
+      "Others";
+    addTo(byMaterial, mat, kg);
   });
 
-  const n = sortedDates.length;
-  const mLabels = sortedDates.map((_, i) => {
-    const diff = n - 1 - i;
-    return diff === 0 ? "M" : `M-${diff}`;
+  // Wet Waste Breakdown — Processed Register only
+  records.forEach((r) => {
+    const monthKey = getMonthKey(r.Date_field);
+    if (!monthKey) return;
+
+    // Filter by exact date range
+    if (dateRange?.start) {
+      const recDate = parseRecordDate(r.Date_field);
+      if (!recDate) return;
+      const s = dateRange.start.getTime();
+      const e = (dateRange.end || dateRange.start).getTime();
+      const t = recDate.getTime();
+      if (t < Math.min(s, e) || t > Math.max(s, e) + 86400000 - 1) return;
+    }
+
+    const regType = r.Register_Type?.display_value || r.Register_Type || "";
+    if (regType !== "Processed Register") return;
+
+    const kg = parseFloat(r.Total_Quantity_Kg || 0);
+    if (kg <= 0) return;
+
+    const cat = r.Waste_Category?.display_value || r.Waste_Category || "Others";
+    addTo(byRegister, cat, kg);
   });
 
-  const byWaste = {},
-    byMaterial = {},
-    byRegister = {};
-  records.forEach((r) => {
-    const cat = r.Waste_Category || "Unknown";
-    byWaste[cat] = (byWaste[cat] || 0) + parseFloat(r.Total_Quantity_Kg || 0);
-    const mat = r.Material_Waste_Category?.Category || "Unknown";
-    byMaterial[mat] =
-      (byMaterial[mat] || 0) + parseFloat(r.Total_Quantity_Kg || 0);
-    const rt = r.Register_Type || "Unknown";
-    byRegister[rt] =
-      (byRegister[rt] || 0) + parseFloat(r.Total_Quantity_Kg || 0);
+  // Sort months chronologically
+  const allSortedMonths = [...allMonthsSet].sort((a, b) => {
+    const [ma, ya] = a.split(" "),
+      [mb, yb] = b.split(" ");
+    return (
+      parseInt(ya) - parseInt(yb) ||
+      MONTH_ORDER.indexOf(ma) - MONTH_ORDER.indexOf(mb)
+    );
   });
+
+  // Always show rolling last 3 months (fill with 0 if no data)
+  const today = new Date();
+  const rollingMonths = [];
+  for (let i = 2; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    rollingMonths.push(`${MONTH_ORDER[d.getMonth()]} ${d.getFullYear()}`);
+  }
+  // Use rolling months as the base; allSortedMonths may have data for them
+  const sortedMonths = rollingMonths;
+
+  const categories = Object.keys(byCatMonth);
+
+  // Per-category totals across ALL months (for table)
+  const catTotals = categories.map((cat) =>
+    Object.values(byCatMonth[cat]).reduce((a, b) => a + b, 0),
+  );
+
+  // Total per month (for default line when nothing selected)
+  const monthTotals = sortedMonths.map((m) =>
+    categories.reduce((sum, cat) => sum + (byCatMonth[cat]?.[m] || 0), 0),
+  );
+
+  const filterZeros = (obj) => {
+    const labels = [],
+      values = [];
+    Object.entries(obj).forEach(([k, v]) => {
+      if (v > 0) {
+        labels.push(k);
+        values.push(v);
+      }
+    });
+    return { labels, values };
+  };
+
+  // Waste category pie: total per category across all months
+  const wastePie = filterZeros(
+    Object.fromEntries(categories.map((c, i) => [c, catTotals[i]])),
+  );
+
+  // Short labels "Jan '26" for display — data keys stay as "Jan 2026"
+  const shortMonths = sortedMonths.map((m) => {
+    const [mon, yr] = m.split(" ");
+    return `${mon} '${yr.slice(-2)}`;
+  });
+
   return {
     line: {
-      labels: mLabels,
-      realDates: sortedDates,
-      values: sortedDates.map((d) => byDate[d]),
+      months: shortMonths,
+      fullMonths: sortedMonths,
+      values: monthTotals,
+      categories,
+      byCatMonth,
     },
-    waste: { labels: Object.keys(byWaste), values: Object.values(byWaste) },
-    material: {
-      labels: Object.keys(byMaterial),
-      values: Object.values(byMaterial),
-    },
-    register: {
-      labels: Object.keys(byRegister),
-      values: Object.values(byRegister),
-    },
+    waste: wastePie,
+    material: filterZeros(byMaterial),
+    register: filterZeros(byRegister),
   };
 }
 
-function buildLineData(labels, values, hidden, realDates = []) {
+// Single total line — recalculates excluding hidden categories
+function buildLineData(lineData, hidden = new Set()) {
+  const { months, fullMonths, categories, byCatMonth } = lineData;
+  const lookupMonths = fullMonths || months; // use full "Jan 2026" keys for data lookup
+  const visibleCats = (categories || []).filter((c) => !hidden.has(c));
+  const data = lookupMonths.map((m) =>
+    visibleCats.reduce((sum, cat) => sum + (byCatMonth?.[cat]?.[m] || 0), 0),
+  );
   return {
-    labels,
+    labels: months,
     datasets: [
       {
-        label: "Total Quantity (kg)",
-        data: labels.map((l, i) => (hidden.has(l) ? null : values[i])),
-        realDates,
+        label: "Total Waste (kg)",
+        data,
+        borderColor: "#2DD4BF",
         backgroundColor: (ctx) => {
           const { chartArea, ctx: c } = ctx.chart;
           if (!chartArea) return "rgba(45,212,191,0.3)";
@@ -535,16 +642,12 @@ function buildLineData(labels, values, hidden, realDates = []) {
           g.addColorStop(1, "rgba(45,212,191,0.01)");
           return g;
         },
-        pointBackgroundColor: labels.map((l) =>
-          hidden.has(l) ? "transparent" : "#2DD4BF",
-        ),
-        pointBorderColor: labels.map((l) =>
-          hidden.has(l) ? "transparent" : "#0f172aa2",
-        ),
+        pointBackgroundColor: "#2DD4BF",
+        pointBorderColor: "#ffffff",
         pointBorderWidth: 2,
         pointRadius: 5,
         pointHoverRadius: 8,
-        tension: 0.4,
+        tension: 0.02,
         fill: "origin",
         borderWidth: 2.5,
         spanGaps: true,
@@ -570,7 +673,6 @@ function buildPieData(labels, values, hidden, colorOffset = 0) {
   };
 }
 
-// Custom plugin: draws percentage labels directly on pie slices
 const piePercentLabelPlugin = {
   id: "piePercentLabels",
   afterDatasetsDraw(chart) {
@@ -599,8 +701,6 @@ const piePercentLabelPlugin = {
     });
   },
 };
-
-// Register plugins globally
 ChartJS.register(piePercentLabelPlugin);
 
 const sharedPieOptions = () => ({
@@ -633,14 +733,11 @@ const lineOptions = {
     title: { display: false },
     tooltip: {
       callbacks: {
-        title: (items) => {
-          const idx = items[0]?.dataIndex;
-          const rd = items[0]?.dataset?.realDates;
-          const real = rd && rd[idx] ? rd[idx] : items[0]?.label;
-          return real;
-        },
+        title: (items) => items[0]?.label || "",
         label: (ctx) =>
-          ctx.parsed.y !== null ? ` ${ctx.parsed.y.toFixed(2)} kg` : " Hidden",
+          ctx.parsed.y !== null
+            ? ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} kg`
+            : "",
       },
     },
   },
@@ -656,7 +753,6 @@ const lineOptions = {
   },
 };
 
-// ─── Fullscreen Icon SVG ───────────────────────────────────────────────────────
 function FullscreenIcon() {
   return (
     <svg
@@ -694,7 +790,6 @@ function CloseIcon() {
   );
 }
 
-// ─── Shared Table ──────────────────────────────────────────────────────────────
 function DataTable({
   labels,
   values,
@@ -733,7 +828,7 @@ function DataTable({
                   transition: "opacity 0.2s, background 0.15s",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#777777";
+                  e.currentTarget.style.background = "#77777731";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = "#ffffff";
@@ -763,16 +858,12 @@ function DataTable({
                   {shownLabels[i]}
                 </td>
                 <td
-                  style={{
-                    ...styles.td,
-                    textAlign: "right",
-                    color: isHidden ? "#475569" : "#414141",
-                  }}
+                  style={{ ...styles.td, textAlign: "right", color: "#EA457F" }}
                 >
                   {values[i].toFixed(2)}{" "}
                   <span
                     style={{
-                      color: isHidden ? "#334155" : "#2DD4BF",
+                      color: "#EA457F",
                       fontWeight: 600,
                       fontSize: "0.72rem",
                     }}
@@ -789,7 +880,6 @@ function DataTable({
   );
 }
 
-// ─── Fullscreen Modal ──────────────────────────────────────────────────────────
 function FullscreenModal({
   title,
   chartType,
@@ -799,7 +889,7 @@ function FullscreenModal({
   onToggle,
   colorOffset,
   onClose,
-  realDates = [],
+  lineData = null,
 }) {
   useEffect(() => {
     const handler = (e) => {
@@ -816,14 +906,11 @@ function FullscreenModal({
     };
   }, []);
 
-  const chartData =
-    chartType === "line"
-      ? buildLineData(labels, values, hidden, realDates)
-      : buildPieData(labels, values, hidden, colorOffset);
-
-  const chartOptions =
-    chartType === "line" ? lineOptions : sharedPieOptions(title);
-  const ChartComponent = chartType === "line" ? Line : Pie;
+  const chartData = lineData
+    ? buildLineData(lineData, hidden)
+    : buildPieData(labels, values, hidden, colorOffset);
+  const chartOptions = lineData ? lineOptions : sharedPieOptions();
+  const ChartComponent = lineData ? Line : Pie;
 
   return (
     <div
@@ -862,9 +949,7 @@ function FullscreenModal({
               colorOffset={colorOffset}
               compact={false}
               isPie={chartType !== "line"}
-              displayLabels={
-                chartType === "line" && realDates.length ? realDates : null
-              }
+              displayLabels={null}
             />
           </div>
         </div>
@@ -944,33 +1029,30 @@ const modal = {
     padding: "1rem 1.25rem",
     overflow: "hidden",
   },
-  tableHint: {
-    margin: "0 0 0.6rem",
-    fontSize: "0.75rem",
-    color: "#475569",
-    fontFamily: "'DM Sans', sans-serif",
-  },
 };
 
-// ─── Quadrant Card ─────────────────────────────────────────────────────────────
 function QuadrantCard({
   title,
   chartType,
-  chartComponent,
   labels,
   values,
   hidden,
   onToggle,
   colorOffset,
-  realDates = [],
   isEmpty = false,
+  lineData = null,
 }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const chartData = lineData
+    ? buildLineData(lineData, hidden)
+    : buildPieData(labels, values, hidden, colorOffset);
+  const ChartComp = lineData ? Line : Pie;
+  const opts = lineData ? lineOptions : sharedPieOptions();
 
   return (
     <>
       <div style={styles.card}>
-        {/* Card heading: title + fullscreen button */}
         <div style={styles.cardHeader}>
           <span style={styles.cardTitle}>{title}</span>
           <button
@@ -982,11 +1064,9 @@ function QuadrantCard({
             <FullscreenIcon />
           </button>
         </div>
-        {/* Separator line */}
         <div style={styles.cardDivider} />
-        {/* Chart */}
         <div style={{ ...styles.chartInner, position: "relative" }}>
-          {chartComponent}
+          <ChartComp data={chartData} options={opts} />
         </div>
         <DataTable
           labels={labels}
@@ -995,10 +1075,8 @@ function QuadrantCard({
           onToggle={onToggle}
           colorOffset={colorOffset}
           compact={true}
-          isPie={chartType !== "line"}
-          displayLabels={
-            chartType === "line" && realDates.length ? realDates : null
-          }
+          isPie={!lineData}
+          displayLabels={null}
         />
       </div>
 
@@ -1011,7 +1089,7 @@ function QuadrantCard({
           hidden={hidden}
           onToggle={onToggle}
           colorOffset={colorOffset}
-          realDates={realDates}
+          lineData={lineData}
           onClose={() => setIsFullscreen(false)}
         />
       )}
@@ -1019,11 +1097,9 @@ function QuadrantCard({
   );
 }
 
-// ─── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [allRecords, setAllRecords] = useState([]);
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const { apiData, loading } = useContext(DataContext);
+  const allRecords = apiData?.RegisterSfData || [];
   const [dateRange, setDateRange] = useState({ start: null, end: null });
 
   const [hiddenLine, setHiddenLine] = useState(new Set());
@@ -1046,18 +1122,6 @@ export default function App() {
     });
   };
 
-  useEffect(() => {
-    fetch("/data.json")
-      .then((r) => r.json())
-      .then((json) => {
-        const records = json.data || [];
-        setAllRecords(records);
-        setTotalRecords(records.length);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
   const handleApply = (start, end) => {
     setDateRange({ start, end });
     resetHidden();
@@ -1067,16 +1131,8 @@ export default function App() {
     resetHidden();
   };
 
-  const filteredRecords = filterByDateRange(allRecords, dateRange);
-  const hasData = filteredRecords.length > 0;
-  const raw = hasData
-    ? processData(filteredRecords)
-    : {
-        line: { labels: [], realDates: [], values: [] },
-        waste: { labels: [], values: [] },
-        material: { labels: [], values: [] },
-        register: { labels: [], values: [] },
-      };
+  const raw = processData(allRecords, dateRange);
+  const hasData = raw.line.months?.length > 0 || raw.waste.labels.length > 0;
 
   if (loading) {
     return (
@@ -1090,17 +1146,12 @@ export default function App() {
   return (
     <div style={styles.page}>
       <header style={styles.header}>
-        {/* Left: Date Range Picker */}
         <div
           style={{ display: "flex", alignItems: "center", minWidth: "200px" }}
         >
           <DateRangePicker dateRange={dateRange} onApply={handleApply} />
         </div>
-
-        {/* Center: Title */}
         <h1 style={styles.title}>Waste Management Dashboard</h1>
-
-        {/* Right: Clear Filter */}
         <div
           style={{
             display: "flex",
@@ -1138,39 +1189,18 @@ export default function App() {
         <QuadrantCard
           title="Waste Quantity Trend"
           chartType="line"
-          chartComponent={
-            <Line
-              data={buildLineData(
-                raw.line.labels,
-                raw.line.values,
-                hiddenLine,
-                raw.line.realDates,
-              )}
-              options={lineOptions}
-            />
-          }
-          labels={raw.line.labels}
-          values={raw.line.values}
+          labels={raw.waste.labels}
+          values={raw.waste.values}
           hidden={hiddenLine}
           onToggle={toggle(setHiddenLine)}
           colorOffset={0}
-          realDates={raw.line.realDates}
           isEmpty={!hasData}
+          lineData={raw.line}
         />
+
         <QuadrantCard
           title="Generated Waste Streams"
           chartType="pie"
-          chartComponent={
-            <Pie
-              data={buildPieData(
-                raw.waste.labels,
-                raw.waste.values,
-                hiddenWaste,
-                0,
-              )}
-              options={sharedPieOptions()}
-            />
-          }
           labels={raw.waste.labels}
           values={raw.waste.values}
           hidden={hiddenWaste}
@@ -1178,20 +1208,10 @@ export default function App() {
           colorOffset={0}
           isEmpty={!hasData}
         />
+
         <QuadrantCard
           title="Dry Waste Category"
           chartType="pie"
-          chartComponent={
-            <Pie
-              data={buildPieData(
-                raw.material.labels,
-                raw.material.values,
-                hiddenMaterial,
-                0,
-              )}
-              options={sharedPieOptions()}
-            />
-          }
           labels={raw.material.labels}
           values={raw.material.values}
           hidden={hiddenMaterial}
@@ -1199,20 +1219,10 @@ export default function App() {
           colorOffset={0}
           isEmpty={!hasData}
         />
+
         <QuadrantCard
-          title="Residual Solid Waste"
+          title="Wet Waste Breakdown"
           chartType="pie"
-          chartComponent={
-            <Pie
-              data={buildPieData(
-                raw.register.labels,
-                raw.register.values,
-                hiddenRegister,
-                2,
-              )}
-              options={sharedPieOptions()}
-            />
-          }
           labels={raw.register.labels}
           values={raw.register.values}
           hidden={hiddenRegister}
@@ -1330,6 +1340,8 @@ const styles = {
     padding: "0.38rem 0.75rem",
     whiteSpace: "nowrap",
     transition: "color 0.2s",
+    fontSize: "13.6px",
+    fontWeight: "600",
   },
   trEven: { background: "#ffffff" },
   trOdd: { background: "#ffffff" },
@@ -1339,12 +1351,13 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     minHeight: "100vh",
-    background: "#0f172a",
     gap: "1rem",
   },
   spinner: {
     width: 40,
     height: 40,
+    border: "3px solid rgba(234,69,127,0.2)",
+    borderTop: "3px solid #EA457F",
     borderRadius: "50%",
     animation: "spin 0.8s linear infinite",
   },
